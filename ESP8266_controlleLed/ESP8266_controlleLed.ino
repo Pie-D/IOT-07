@@ -34,6 +34,7 @@ int solanbat = 0;
 int solantat = 0;
 FirebaseData firebaseData;
 String path = "/";
+String dataPath = "wo-F6FyU_cajnKQ6-B6BWDfiPRHeWbBj/Led/1-11-2023";
 FirebaseJson json;
 FirebaseAuth auth;
 FirebaseConfig config;
@@ -49,6 +50,36 @@ String getCurrentDate() {
   String date = ngay + "-" + thang +"-" + nam ;
   return date;
 }
+String getSoLanTat(String datapath){
+  if (Firebase.get(firebaseData, datapath)) {
+      String x = firebaseData.stringData();
+      Serial.println(x);
+      char kyTu = ',';
+      int soLan = 0;
+      for(int i = 0; i < x.length(); i ++){
+        if(x[i] == kyTu){
+          soLan++;
+        }
+      }
+      return String(soLan + 1);
+  }
+  return "0";
+}
+String getSoLanBat(String datapath){
+  if (Firebase.get(firebaseData, datapath)) {
+      String x = firebaseData.stringData();
+      Serial.println(x);
+      char kyTu = ',';
+      int soLan = 0;
+      for(int i = 0; i < x.length(); i ++){
+        if(x[i] == kyTu){
+          soLan++;
+        }
+      }
+      return String(soLan + 1);
+  }
+  return "0";
+}
 String getCurrentTime() {
   // Lấy thời gian hiện tại
   time_t now = time(nullptr);
@@ -60,35 +91,38 @@ String getCurrentTime() {
   String Time = gio + ":" + phut + ":" + giay;
   return Time;
 }
-std::vector<String> getAllDataFromFirebase(dataPath) {
-  String data[] = Firebase.getString(firebaseData, dataPath);
-  // String dataValues = data.substring(1, data.length() - 1); // Loại bỏ dấu ngoặc đơn ở đầu và cuối
-  // int itemCount = 0;
+void getAllDataFromFirebase(String datapath) {
+  if (Firebase.get(firebaseData, datapath)) {
+    if (firebaseData.dataType() == "json") {
+      // Dữ liệu là dạng JSON, bạn có thể xử lý dữ liệu ở đây
+      Serial.println("Data from Firebase: " + firebaseData.jsonString());
+    } else {
+      Serial.println("Data is not in JSON format");
+    }
+  } else {
+    Serial.println("Failed to get data from Firebase");
+  }
 
-  // // Đếm số phần tử trong danh sách
-  // for (int i = 0; i < dataValues.length(); i++) {
-  //   if (dataValues[i] == ',') {
-  //     itemCount++;
-  //   }
-  // }
-  // itemCount++;  // Tăng thêm một cho phần tử cuối cùng
+}
+// 
+int deleteDataFromFirebase(String datapath) {
+  if (Firebase.get(firebaseData, datapath)) {
+    if (firebaseData.dataType() == "json") {
+      // Dữ liệu là dạng JSON, bạn có thể xử lý dữ liệu ở đây
+      Firebase.set(firebaseData, datapath, NULL);
+      Serial.println("Xoa thanh cong");
+      return 1; // co the xoa
+    } else {
+      Serial.println("Da xoa roi");
+      return 0; // da xoa 1 lan r
+      
+    }
+    
+  } else {
+    Serial.println("Empty");
+    return 2; // ko ton tai
+  }
 
-  // String dataArray[itemCount];
-  // int startIndex = 0;
-  // int endIndex = dataValues.indexOf(',');
-
-  // for (int i = 0; i < itemCount; i++) {
-  //   if (endIndex == -1) {
-  //     dataArray[i] = dataValues.substring(startIndex);
-  //   } else {
-  //     dataArray[i] = dataValues.substring(startIndex, endIndex);
-  //   }
-
-  //   startIndex = endIndex + 2; // Bỏ qua dấu phẩy và dấu cách
-  //   endIndex = dataValues.indexOf(',', startIndex);
-  // }
-
-  return dataArray;
 }
 void setup() {
   Serial.begin(9600);
@@ -120,12 +154,8 @@ void setup() {
   config.signer.tokens.legacy_token = "QNZWTt0SoQivgDeFSL5imCXQxGr3gwMEl9Cq49O2";
   
   Firebase.begin(&config, &auth);
-  String currentDate = getCurrentDate();
-  String path = path + "/" + BLYNK_AUTH_TOKEN + "/" + "Led" +"/" + currentDate );
-  String data[] = getAllDataFromFirebase(path);
-  for(int i = 0 ; i < length(data); i ++){
-    Serial.println(data[i]);
-  }
+  getAllDataFromFirebase(dataPath);
+  deleteDataFromFirebase(dataPath);
 }
 
 BLYNK_WRITE(V2) {
@@ -156,7 +186,44 @@ void buttonPressed(int buttonPin, int ledPin, bool &state) {
     if (finalButtonState == LOW && finalButtonState != state) {
       String currentDate = getCurrentDate(); // Thời gian hiện tại
       String currentTime = getCurrentTime();
-      Firebase.setString(firebaseData, path + "/" + BLYNK_AUTH_TOKEN + "/" + "Led" +"/" + currentDate + "/" + (digitalRead(ledPin) ? "OFF" : "ON") + "/" + (digitalRead(ledPin) ? String(solantat++) : String(solanbat++)) , currentTime);
+      int firstDashIndex = currentDate.indexOf('-');
+      int secondDashIndex = currentDate.indexOf('-', currentDate.indexOf('-') + 1);
+      String dayStr = "";  // Tìm vị trí của dấu gạch đầu tiên
+      String monthStr = "";
+      String yearStr = "";
+      int dayInt;
+      int monthInt;
+      int yearInt;
+      dayStr = currentDate.substring(0, firstDashIndex);
+      monthStr = currentDate.substring(firstDashIndex + 1, secondDashIndex);
+      yearStr = currentDate.substring(secondDashIndex + 1);  // Lấy chuỗi con từ sau dấu gạch thứ hai đến hết chuỗi
+      dayInt = dayStr.toInt();
+      monthInt = monthStr.toInt();
+      yearInt = yearStr.toInt();
+
+      if(dayInt == 2){
+        if(monthInt != 1){
+          monthInt = monthInt - 1;
+        } else {
+          monthInt = 12;
+          yearInt = yearInt - 1;
+        }
+        int count = 0;
+        for(int i = 31 ; i > 0 ; i --){
+          String x = String(BLYNK_AUTH_TOKEN) + "/Led/" + String(i) + "-" + String(monthInt) + "-" + String(yearInt);
+          if(deleteDataFromFirebase(x) % 2 == 0){
+            count ++;
+          }
+          if(count == 4 ) break;
+        }
+      }
+
+
+      String x = String(BLYNK_AUTH_TOKEN) + "/Led/" + currentDate ;
+      String soLanBat = getSoLanBat(x + "/ON");
+      String soLanTat = getSoLanTat(x + "/OFF");
+      Serial.println(x); 
+      Firebase.setString(firebaseData, path + BLYNK_AUTH_TOKEN + "/" + "Led" +"/" + currentDate + "/" + (digitalRead(ledPin) ? "OFF" : "ON") + "/" + (digitalRead(ledPin) ? soLanTat : soLanBat) , currentTime);
       Serial.println((digitalRead(ledPin) ? "OFF" : "ON"));
       digitalWrite(ledPin, !digitalRead(ledPin));
       int ledState = digitalRead(ledPin);
