@@ -30,8 +30,6 @@ bool previousButtonState = LOW;
 bool previousButtonState2 = HIGH; // Trạng thái trước đó của nút bấm
 int timezone = 7*3600;
 int dat = 0;
-int solanbat = 0;
-int solantat = 0;
 FirebaseData firebaseData;
 String path = "/";
 String dataPath = "wo-F6FyU_cajnKQ6-B6BWDfiPRHeWbBj/Led/1-11-2023";
@@ -174,7 +172,6 @@ BLYNK_WRITE(V7) {
     digitalWrite(Led2, LOW);
   }
 }
-
 void buttonPressed(int buttonPin, int ledPin, bool &state) {
   bool currentButtonState = digitalRead(buttonPin);
 
@@ -239,6 +236,110 @@ void buttonPressed(int buttonPin, int ledPin, bool &state) {
     state = finalButtonState;
   }
 }
+// void buttonPressed(int buttonPin, int ledPin, bool &state) {
+//   bool currentButtonState = digitalRead(buttonPin);
+
+//   if (currentButtonState != state) {
+//     delay(50);
+
+//     bool finalButtonState = digitalRead(buttonPin);
+
+//     if (finalButtonState == LOW && finalButtonState != state) {
+//       String currentDate = getCurrentDate(); // Thời gian hiện tại
+//       String currentTime = getCurrentTime();
+//       int firstDashIndex = currentDate.indexOf('-');
+//       int secondDashIndex = currentDate.indexOf('-', currentDate.indexOf('-') + 1);
+//       String dayStr = "";  // Tìm vị trí của dấu gạch đầu tiên
+//       String monthStr = "";
+//       String yearStr = "";
+//       int dayInt;
+//       int monthInt;
+//       int yearInt;
+//       dayStr = currentDate.substring(0, firstDashIndex);
+//       monthStr = currentDate.substring(firstDashIndex + 1, secondDashIndex);
+//       yearStr = currentDate.substring(secondDashIndex + 1);  // Lấy chuỗi con từ sau dấu gạch thứ hai đến hết chuỗi
+//       dayInt = dayStr.toInt();
+//       monthInt = monthStr.toInt();
+//       yearInt = yearStr.toInt();
+
+//       if(dayInt == 2){
+//         if(monthInt != 1){
+//           monthInt = monthInt - 1;
+//         } else {
+//           monthInt = 12;
+//           yearInt = yearInt - 1;
+//         }
+//         int count = 0;
+//         for(int i = 31 ; i > 0 ; i --){
+//           String x = String(BLYNK_AUTH_TOKEN) + "/Led/" + String(i) + "-" + String(monthInt) + "-" + String(yearInt);
+//           if(deleteDataFromFirebase(x) % 2 == 0){
+//             count ++;
+//           }
+//           if(count == 4 ) break;
+//         }
+//       }
+
+
+//       String x = String(BLYNK_AUTH_TOKEN) + "/Led/" + currentDate ;
+//       String soLanBat = getSoLanBat(x + "/ON");
+//       String soLanTat = getSoLanTat(x + "/OFF");
+//       Serial.println(x); 
+
+//       unsigned long lastUpdateTime = 0;
+//       unsigned long updateInterval = 5000; // 5 giây
+//       unsigned long timeLive = 0;
+//       unsigned long ledx = digitalRead(ledPin);
+//       if (!ledx) {
+//         Firebase.setInt(firebaseData, path + BLYNK_AUTH_TOKEN + "/" + "Led" +"/" + currentDate + "/" + "ON"+ "/" +soLanBat + "/"  + currentTime,0);
+//         bool ButtonState = 0;
+//         // Serial.print("digitalRead(ledPin) : ");
+//         // Serial.println(digitalRead(ledPin));
+//         Serial.println((digitalRead(ledPin) ? "OFF" : "ON"));
+//         digitalWrite(ledPin, !digitalRead(ledPin));
+//         while (ledx == ButtonState) {
+//           if (millis() - lastUpdateTime >= updateInterval) {
+//             // Thực hiện cập nhật đèn mỗi 5 giây
+//             lastUpdateTime = millis();
+//             timeLive += 5;
+//             Firebase.setInt(firebaseData, path + BLYNK_AUTH_TOKEN + "/" + "Led" +"/" + currentDate + "/" + "ON"+ "/" +soLanBat + "/"  + currentTime,timeLive);
+//           }
+//         // Serial.print("digitalRead(ledPin) : ");
+//         // Serial.println(digitalRead(ledPin));
+//         ButtonState = digitalRead(buttonPin); 
+//         // Serial.print("digitalRead(buttonPin) : ");
+//         // Serial.println(ButtonState);
+//         ledx = 1;
+          
+//         }
+//         int ledState = digitalRead(ledPin);
+
+//         if (ledPin == Led) {
+//           Blynk.virtualWrite(V2, ledState);
+//         } else if (ledPin == Led2) {
+//           Blynk.virtualWrite(V7, ledState);
+          
+//         }
+//       } else {
+//         Firebase.setString(firebaseData, path + BLYNK_AUTH_TOKEN + "/" + "Led" + "/" + currentDate + "/" + "OFF" + "/" + soLanTat, currentTime);
+
+//         Serial.println((digitalRead(ledPin) ? "OFF" : "ON"));
+//         digitalWrite(ledPin, !digitalRead(ledPin));
+//         int ledState = digitalRead(ledPin);
+
+//         if (ledPin == Led) {
+//           Blynk.virtualWrite(V2, ledState);
+//         } else if (ledPin == Led2) {
+//           Blynk.virtualWrite(V7, ledState);
+          
+//         }
+//       }
+      
+//     } 
+
+//     state = finalButtonState;
+//   }
+// }
+
 
 // void buttonPressed(int buttonPin, int ledPin, bool &state) {
 //   bool currentButtonState = digitalRead(buttonPin);
