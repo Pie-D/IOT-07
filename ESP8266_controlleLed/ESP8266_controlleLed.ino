@@ -29,7 +29,7 @@
 bool previousButtonState = HIGH, previousButtonState2 = HIGH, previousButtonState3 = HIGH; 
 int dat = 0, timezone = 7*3600;
 FirebaseData firebaseData;
-String path = "/", currentdate = "";
+String path = "/", current_date = "";
 String dataPath = "wo-F6FyU_cajnKQ6-B6BWDfiPRHeWbBj/Led/1-13-2023";
 FirebaseJson json;
 FirebaseAuth auth;
@@ -39,6 +39,7 @@ std::unordered_map<int, int> number;
 unsigned long previousMillis = 0;
 const long interval = 1000;  
 const String days[] = {"Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"};
+Ticker reconnectTimer;
 
 const String getDayOfWeekString(String date) {
   int day, month, year;
@@ -65,6 +66,17 @@ const String getDayOfWeekString(String date) {
   return days[dayOfWeek - 1];
 }
 
+void checkWiFiConnection() {
+  // Bắt đầu kiểm tra kết nối mạng từ giây thứ 180
+  if (millis() < 60000) {
+    return;
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Lost WiFi connection. Resetting settings and reconnecting...");
+    SetUpWifi();
+  }
+}
+
 String getCurrentDate() {
   // Lấy thời gian hiện tại
   time_t now = time(nullptr);
@@ -79,12 +91,12 @@ String getCurrentDate() {
     delay(500);
     return getCurrentDate();
   }
-  if (currentdate != date){
-    currentdate = date;
+  if (current_date != date){
+    current_date = date;
     getSoLanBatAsync(Led);
     getSoLanBatAsync(Led2);
   }
-  return getDayOfWeekString(date) + "," + date;
+  return getDayOfWeekString(date) + path + date;
 }
 
 void getSoLanBatAsync(int ledPin) {
@@ -122,9 +134,11 @@ void getSoLanTatAsync(int ledPin) {
     result = soLan + 1;
   }
   if (result < number[ledPin]){
+    Serial.println("backup data!");
     if (Firebase.get(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + "Online/" + currentDate)){
       String currentTime = firebaseData.stringData();
       Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + currentDate + path + "OFF" + path + String(number[ledPin] - 1), currentTime);
+      Blynk.virtualWrite(ledPin == Led ? V2 : V7, false);
     }
   }
 }
@@ -165,6 +179,7 @@ void SetUpWifi(){
     SetupBlynk();
     SetupFirebase();
   }
+  reconnectTimer.attach(60, checkWiFiConnection);
 }
 
 void SetupBlynk(){
@@ -192,7 +207,7 @@ void SetupFirebase(){
   String nam = String(p_tm -> tm_year + 1900);
   
   // Trả về chuỗi ngày giờ
-  currentdate = ngay + "-" + thang +"-" + nam ;
+  current_date = ngay + "-" + thang +"-" + nam ;
   getSoLanBatAsync(Led);
   getSoLanBatAsync(Led2);
   Serial.println("Get result : " + String(number[Led2]) + " " + String(number[Led]));
@@ -227,11 +242,7 @@ void DataToFirebase(int ledPin){
 void activeLed(int ledPin, bool status){
   digitalWrite(ledPin, status);
   int ledState = digitalRead(ledPin);
-  if (ledPin == Led) {
-    Blynk.virtualWrite(V2, ledState);
-  } else if (ledPin == Led2) {
-    Blynk.virtualWrite(V7, ledState);
-  }
+  Blynk.virtualWrite(ledPin == Led ? V2 : V7, ledState);
   writeDataToFirebase(ledPin, ledState);
 }
 
@@ -264,7 +275,7 @@ void setup() {
   SetUpWifi();
 }
 
-void test(){
+void backupData(){
   // Lấy thời gian hiện tại
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
@@ -284,5 +295,5 @@ void loop() {
   buttonPressed(Button, Led, previousButtonState);
   buttonPressed(Button2, Led2, previousButtonState2);
   buttonPressed(ButtonReset, previousButtonState3);
-  //test();
+  backupData();
 }
