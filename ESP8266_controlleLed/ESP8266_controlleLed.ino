@@ -93,8 +93,8 @@ String getCurrentDate() {
   }
   if (current_date != date){
     current_date = date;
-    getSoLanBatAsync(Led);
-    getSoLanBatAsync(Led2);
+    number[Led] = 0;
+    number[Led2] = 0;
   }
   return getDayOfWeekString(date) + path + date;
 }
@@ -103,8 +103,11 @@ void getSoLanBatAsync(int ledPin) {
   String currentDate = getCurrentDate();
   String datapath = path + String(BLYNK_AUTH_TOKEN) + (ledPin == Led ? "/D6/" : "/D2/") + currentDate + "/ON";
   int result = 0;
-  if (Firebase.get(firebaseData, datapath)) {
+  Serial.println(datapath);
+  bool status = Firebase.get(firebaseData, datapath);
+  if (status) {
     String x = firebaseData.stringData();
+    Serial.println(x);
     char kyTu = ',';
     int soLan = 0;
     for (int i = 0; i < x.length(); i++) {
@@ -114,16 +117,21 @@ void getSoLanBatAsync(int ledPin) {
     }
     result = soLan + 1;
   }
+  Serial.println(status);
   number[ledPin] = result;
-  getSoLanTatAsync(ledPin);
+  if (status){
+    getSoLanTatAsync(ledPin);
+  }
 }
 
 void getSoLanTatAsync(int ledPin) {
   String currentDate = getCurrentDate();
   String datapath = path + String(BLYNK_AUTH_TOKEN) + (ledPin == Led ? "/D6/" : "/D2/") + currentDate + "/OFF";
   int result = 0;
-  if (Firebase.get(firebaseData, datapath)) {
+  bool status = Firebase.get(firebaseData, datapath);
+  if (status) {
     String x = firebaseData.stringData();
+    Serial.println(x);
     char kyTu = ',';
     int soLan = 0;
     for (int i = 0; i < x.length(); i++) {
@@ -139,6 +147,7 @@ void getSoLanTatAsync(int ledPin) {
       String currentTime = firebaseData.stringData();
       Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + currentDate + path + "OFF" + path + String(number[ledPin] - 1), currentTime);
       Blynk.virtualWrite(ledPin == Led ? V2 : V7, false);
+      Serial.println("done!");
     }
   }
 }
@@ -176,6 +185,7 @@ void SetUpWifi(){
     delay(800);
   }
   else{
+    wifiManager.setConfigPortalTimeout(180);
     SetupBlynk();
     SetupFirebase();
   }
@@ -196,8 +206,10 @@ void SetupBlynk(){
 }
 
 void SetupFirebase(){
-  config.database_url = "https://iot-nhom-7-d70d7-default-rtdb.firebaseio.com/";
-  config.signer.tokens.legacy_token = "QNZWTt0SoQivgDeFSL5imCXQxGr3gwMEl9Cq49O2";
+  config.database_url = //"https://iot-unity-5a64f-default-rtdb.asia-southeast1.firebasedatabase.app/";
+  "https://iot-nhom-7-d70d7-default-rtdb.firebaseio.com/";
+  config.signer.tokens.legacy_token = //"XWYmXKU9f5egoHYHVhtqGn6H4wZJEirWKVtTX1Yv";
+   "QNZWTt0SoQivgDeFSL5imCXQxGr3gwMEl9Cq49O2";
   Firebase.begin(&config, &auth);
   // Lấy thời gian hiện tại
   time_t now = time(nullptr);
