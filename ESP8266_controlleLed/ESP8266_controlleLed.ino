@@ -117,38 +117,19 @@ void getSoLanBatAsync(int ledPin) {
     }
     result = soLan + 1;
   }
-  Serial.println(status);
   number[ledPin] = result;
   if (status){
-    getSoLanTatAsync(ledPin);
+    setDataTatAsync(ledPin, currentDate);
   }
 }
 
-void getSoLanTatAsync(int ledPin) {
-  String currentDate = getCurrentDate();
-  String datapath = path + String(BLYNK_AUTH_TOKEN) + (ledPin == Led ? "/D6/" : "/D2/") + currentDate + "/OFF";
-  int result = 0;
-  bool status = Firebase.get(firebaseData, datapath);
-  if (status) {
-    String x = firebaseData.stringData();
-    Serial.println(x);
-    char kyTu = ',';
-    int soLan = 0;
-    for (int i = 0; i < x.length(); i++) {
-      if (x[i] == kyTu) {
-        soLan++;
-      }
-    }
-    result = soLan + 1;
-  }
-  if (result < number[ledPin]){
+void setDataTatAsync(int ledPin, String currentDate) {
+  if (Firebase.get(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + "Online/" + currentDate)){
     Serial.println("backup data!");
-    if (Firebase.get(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + "Online/" + currentDate)){
-      String currentTime = firebaseData.stringData();
-      Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + currentDate + path + "OFF" + path + String(number[ledPin] - 1), currentTime);
-      Blynk.virtualWrite(ledPin == Led ? V2 : V7, false);
-      Serial.println("done!");
-    }
+    String currentTime = firebaseData.stringData();
+    Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + currentDate + path + "OFF" + path + String(number[ledPin] - 1), currentTime);
+    Blynk.virtualWrite(ledPin == Led ? V2 : V7, false);
+    Serial.println("done!");
   }
 }
 
