@@ -35,6 +35,7 @@ FirebaseJson json;
 FirebaseAuth auth;
 FirebaseConfig config;
 WiFiManager wifiManager;
+
 std::unordered_map<int, int> number;
 unsigned long previousMillis = 0;
 const long interval = 1000;  
@@ -159,6 +160,7 @@ String getCurrentMinute() {
 void SetUpWifi(){
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
   Serial.begin(9600);
+  wifiManager.setConfigPortalTimeout(180);
   if (!wifiManager.autoConnect("NHÀ THÔNG MINH"))
   {
     Serial.println("KẾT NỐI THẤT BẠI ĐANG RESET ESP CHỜ.....");
@@ -166,7 +168,8 @@ void SetUpWifi(){
     delay(800);
   }
   else{
-    wifiManager.setConfigPortalTimeout(180);
+    configTime(timezone,dat,"pool.ntp.org","time.nist.gov");
+    Serial.println("time :" + getCurrentDate());
     SetupBlynk();
     SetupFirebase();
   }
@@ -182,8 +185,6 @@ void SetupBlynk(){
   pinMode(Button, INPUT_PULLUP);
   pinMode(Led2, OUTPUT);
   pinMode(Button2, INPUT_PULLUP);  // Thiết lập chân nút bấm với chế độ INPUT_PULLUP
-  configTime(timezone,dat,"pool.ntp.org","time.nist.gov");
-  Serial.println("connecting...");
 }
 
 void SetupFirebase(){
@@ -198,7 +199,6 @@ void SetupFirebase(){
   String ngay  = String(p_tm -> tm_mday);
   String thang = String(p_tm -> tm_mon + 1) ;
   String nam = String(p_tm -> tm_year + 1900);
-  
   // Trả về chuỗi ngày giờ
   current_date = ngay + "-" + thang +"-" + nam ;
   getSoLanBatAsync(Led);
