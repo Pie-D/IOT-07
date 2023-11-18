@@ -373,4 +373,5 @@ void buttonPressed(int buttonPin, int ledPin, bool &state) {
 void loop() {
   Blynk.run();
   buttonPressed(Button, Led, previousButtonState);
+  buttonPressed(Button2, Led2, previousButtonState2);
 }
