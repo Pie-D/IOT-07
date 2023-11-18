@@ -89,7 +89,7 @@ String getCurrentDate() {
   // Trả về chuỗi ngày giờ
   String date = ngay + "-" + thang +"-" + nam ;
   if (date == "1-1-1970"){
-    delay(500);
+    delay(66);
     return getCurrentDate();
   }
   if (current_date != date){
@@ -242,7 +242,6 @@ void activeLed(int ledPin, bool status){
 void buttonPressed(int buttonPin, int ledPin, bool &state) {
   bool currentButtonState = digitalRead(buttonPin);
   if (currentButtonState != state) {
-    delay(50);
     bool finalButtonState = digitalRead(buttonPin);
     if (finalButtonState == LOW && finalButtonState != state) {
       activeLed(ledPin, !digitalRead(ledPin));
