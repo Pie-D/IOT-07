@@ -16,9 +16,9 @@
 #include <Wire.h>
 #include <TimeLib.h>
 #include <vector>
-#include <Ticker.h>
 #include <unordered_map>
 #include <time.h>
+#include <FS.h>
 
 #define Led D6
 #define Led2 D2
@@ -35,12 +35,11 @@ FirebaseJson json;
 FirebaseAuth auth;
 FirebaseConfig config;
 WiFiManager wifiManager;
-
 std::unordered_map<int, int> number;
 unsigned long previousMillis = 0;
 const long interval = 1000;  
 const String days[] = {"Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"};
-Ticker reconnectTimer;
+const char *fileName = "data.txt";
 
 const String getDayOfWeekString(String date) {
   int day, month, year;
@@ -67,15 +66,33 @@ const String getDayOfWeekString(String date) {
   return days[dayOfWeek - 1];
 }
 
-void checkWiFiConnection() {
-  // Bắt đầu kiểm tra kết nối mạng từ giây thứ 180
-  if (millis() < 60000) {
+String readDataFromFile(int ledpin) {
+  // Mở file để đọc
+  File file = SPIFFS.open(String(ledpin) + fileName, "r");
+  if (!file) {
+    Serial.println("Không thể mở file để đọc");
+    return "null";
+  }
+  // Đọc dữ liệu từ file và in ra Serial Monitor
+  String data = file.readString();
+  Serial.println("Dữ liệu đọc từ file: " + data);
+  // Đóng file
+  file.close();
+  return data;
+}
+
+void writeDataToFile(String data, int ledpin) {
+  // Mở hoặc tạo file để ghi
+  File file = SPIFFS.open(String(ledpin) + fileName, "w");
+  if (!file) {
+    Serial.println("Không thể mở hoặc tạo file để ghi");
     return;
   }
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Lost WiFi connection. Resetting settings and reconnecting...");
-    SetUpWifi();
-  }
+  // Ghi dữ liệu vào file
+  file.print(data);
+  // Đóng file
+  file.close();
+  Serial.println("Dữ liệu đã được ghi vào file");
 }
 
 String getCurrentDate() {
@@ -125,13 +142,10 @@ void getSoLanBatAsync(int ledPin) {
 }
 
 void setDataTatAsync(int ledPin, String currentDate) {
-  if (Firebase.get(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + "Online/" + currentDate)){
-    Serial.println("backup data!");
-    String currentTime = firebaseData.stringData();
-    Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + currentDate + path + "OFF" + path + String(number[ledPin] - 1), currentTime);
-    Blynk.virtualWrite(ledPin == Led ? V2 : V7, false);
-    Serial.println("done!");
-  }
+  Serial.println("backup data!");
+  String currentTime =  readDataFromFile(ledPin);
+  Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + currentDate + path + "OFF" + path + String(number[ledPin] - 1), currentTime);
+  Blynk.virtualWrite(ledPin == Led ? V2 : V7, false);
 }
 
 String getCurrentTime() {
@@ -173,7 +187,6 @@ void SetUpWifi(){
     SetupBlynk();
     SetupFirebase();
   }
-  reconnectTimer.attach(60, checkWiFiConnection);
 }
 
 void SetupBlynk(){
@@ -226,10 +239,9 @@ void writeDataToFirebase(int ledPin, int ledState){
   number[ledPin] += ledState ? 0 : 1;
 }
 
-void DataToFirebase(int ledPin){
-  String currentDate = getCurrentDate(); // Thời gian hiện tại
+void SaveData(int ledPin){
   String currentTime = getCurrentTime();
-  Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + "Online/" + currentDate, currentTime);
+  writeDataToFile(currentTime, ledPin);
 }
 
 void activeLed(int ledPin, bool status){
@@ -253,7 +265,6 @@ void buttonPressed(int buttonPin, int ledPin, bool &state) {
 void buttonPressed(int buttonPin, bool &state) {
   bool currentButtonState = digitalRead(buttonPin);
   if (currentButtonState != state) {
-    delay(50);
     bool finalButtonState = digitalRead(buttonPin);
     if (finalButtonState == LOW && finalButtonState != state) {
       wifiManager.resetSettings();        
@@ -264,6 +275,11 @@ void buttonPressed(int buttonPin, bool &state) {
 }
 
 void setup() {
+  // Khởi tạo SPIFFS
+  if (!SPIFFS.begin()) {
+    Serial.println("Không thể khởi tạo SPIFFS");
+    return;
+  }
   SetUpWifi();
 }
 
@@ -272,12 +288,12 @@ void backupData(){
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;  // Cập nhật thời điểm lần gọi cuối cùng
-    // Kiểm tra và gọi DataToFirebase cho Led1 và Led2
+    // Kiểm tra và gọi SaveData cho Led1 và Led2
     if (digitalRead(Led)) {
-      DataToFirebase(Led);
+      SaveData(Led);
     }
     if (digitalRead(Led2)) {
-      DataToFirebase(Led2);
+      SaveData(Led2);
     }
   }
 }
@@ -286,10 +302,6 @@ void loop() {
   Blynk.run();
   buttonPressed(Button, Led, previousButtonState);
   buttonPressed(Button2, Led2, previousButtonState2);
-<<<<<<< HEAD
-}
-=======
   buttonPressed(ButtonReset, previousButtonState3);
   backupData();
 }
->>>>>>> 60088863072f8bdd3c44f528f5d15aeeaa181c86
