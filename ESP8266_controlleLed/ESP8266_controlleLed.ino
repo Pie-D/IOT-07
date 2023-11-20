@@ -10,30 +10,33 @@
 #include <WiFiManager.h>
 #include <Blynk.h>
 #include <BlynkSimpleEsp8266.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266Firebase.h>
+#include <FirebaseESP8266.h>
 #include <TimeLib.h>
 #include <unordered_map>
 #include <time.h>
 #include <FS.h>
+#include <Ticker.h>
 
 #define Led D6
 #define Led2 D2
 #define Button D7
 #define Button2 D3
 #define ButtonReset D4
-#define REFERENCE_URL "https://iot-nhom-7-d70d7-default-rtdb.firebaseio.com/"  // Your Firebase project reference url
 
-bool previousButtonState = HIGH, previousButtonState2 = HIGH, previousButtonState3 = HIGH; 
+bool previousButtonState = HIGH, previousButtonState2 = HIGH, previousButtonState3 = HIGH, planClick = HIGH; 
 int dat = 0, timezone = 7*3600;
-String current_date = "";
-Firebase firebase(REFERENCE_URL);
+String path = "/", current_date = "", ngay, thang, nam, date, planOn[4], planOff[4];
+FirebaseJson json;
+FirebaseData firebaseData;
+FirebaseJsonData firebaseJsonData;
+FirebaseAuth auth;
+FirebaseConfig config;
 WiFiManager wifiManager;
 std::unordered_map<int, int> number;
-unsigned long previousMillis = 0;
-const long interval = 1000;  
 const String days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 const char *fileName = "data.txt";
+Ticker reconnectTimer;
+
 
 const String getDayOfWeekString(String date) {
   int day, month, year;
@@ -86,46 +89,74 @@ void writeDataToFile(String data, int ledpin) {
   file.print(data);
   // Đóng file
   file.close();
-  Serial.println("Dữ liệu đã được ghi :" + data);
+  Serial.println("Dữ liệu đã được ghi vào file " + String(ledpin) + ":" + data);
 }
 
 String getCurrentDate() {
   // Lấy thời gian hiện tại
   time_t now = time(nullptr);
   struct tm* p_tm = localtime(&now);
-  String ngay  = String(p_tm -> tm_mday);
-  String thang = String(p_tm -> tm_mon + 1) ;
-  String nam = String(p_tm -> tm_year + 1900);
+  ngay  = String(p_tm -> tm_mday);
+  thang = String(p_tm -> tm_mon + 1) ;
+  nam = String(p_tm -> tm_year + 1900);
   
   // Trả về chuỗi ngày giờ
-  String date = ngay + "-" + thang +"-" + nam ;
+  date = ngay + "-" + thang +"-" + nam ;
+  if (date == "1-1-1970"){
+    delay(66);
+    return getCurrentDate();
+  }
+  if (current_date != date){
+    resetDay(date);
+  }
+  return date;
+}
+
+String connectCurrentDate() {
+  // Lấy thời gian hiện tại
+  time_t now = time(nullptr);
+  struct tm* p_tm = localtime(&now);
+  ngay  = String(p_tm -> tm_mday);
+  thang = String(p_tm -> tm_mon + 1) ;
+  nam = String(p_tm -> tm_year + 1900);
+  
+  // Trả về chuỗi ngày giờ
+  date = ngay + "-" + thang +"-" + nam ;
   if (date == "1-1-1970"){
     delay(66);
     return getCurrentDate();
   }
   if (current_date != date){
     current_date = date;
-    number[Led] = 0;
-    number[Led2] = 0;
   }
-  return getDayOfWeekString(date) + "/" + date;
+  return date;
+}
+
+void resetDay(String date){
+  Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + "/D6/" + getDayOfWeekString(current_date) + path + "onetime", NULL);
+  Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + "/D2/" + getDayOfWeekString(current_date) + path + "onetime", NULL);
+  current_date = date;
+  number.clear();
+  UpdatePlan();
 }
 
 void getSoLanBatAsync(int ledPin) {
   String currentDate = getCurrentDate();
-  String dataPath = String(BLYNK_AUTH_TOKEN) + (ledPin == Led ? "/D6/" : "/D2/") + currentDate + "/ON";
-  number[ledPin] = 0;
-  String x = firebase.getString(dataPath);
-  if (x != "ul") {
-    Serial.println(x);
-    char kyTu = ',';
-    int soLan = 0;
+  String datapath = path + String(BLYNK_AUTH_TOKEN) + (ledPin == Led ? "/D6/" : "/D2/") + getDayOfWeekString(currentDate) + path + currentDate;
+  int result = 0;
+  Serial.println(datapath);
+  bool status = Firebase.get(firebaseData, datapath);
+  if (status) {
+    String x = firebaseData.stringData();
+    char kyTu = '}';
     for (int i = 0; i < x.length(); i++) {
       if (x[i] == kyTu) {
-        soLan++;
+        result++;
       }
     }
-    number[ledPin] = soLan + 1;
+  }
+  number[ledPin] = result;
+  if (status){
     setDataTatAsync(ledPin, currentDate);
   }
 }
@@ -133,7 +164,7 @@ void getSoLanBatAsync(int ledPin) {
 void setDataTatAsync(int ledPin, String currentDate) {
   Serial.println("backup data!");
   String currentTime =  readDataFromFile(ledPin);
-  firebase.setString(String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + currentDate + "/" + "OFF" + "/" + String(number[ledPin] - 1), currentTime);
+  Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + getDayOfWeekString(currentDate) + path + currentDate + path + String(number[ledPin] - 1) + path + "OFF", currentTime);
   Blynk.virtualWrite(ledPin == Led ? V2 : V7, false);
 }
 
@@ -144,20 +175,50 @@ String getCurrentTime() {
   String gio = String(p_tm -> tm_hour);
   String phut = String(p_tm -> tm_min);
   String giay = String(p_tm -> tm_sec);
+  // Đảm bảo rằng chuỗi phút và giây có hai chữ số
+  if (phut.length() == 1) {
+    phut = "0" + phut;
+  }
+  if (giay.length() == 1) {
+    giay = "0" + giay;
+  }
   // Trả về chuỗi ngày giờ
   String Time = gio + ":" + phut + ":" + giay;
   return Time;
 }
 
-String getCurrentMinute() {
+void checkCurrentPlanTime() {
+  String date = getCurrentDate();
+  if (date != current_date){
+    resetDay(date);
+    return;
+  }
   // Lấy thời gian hiện tại
   time_t now = time(nullptr);
   struct tm* p_tm = localtime(&now);
   String gio = String(p_tm -> tm_hour);
   String phut = String(p_tm -> tm_min);
-  // Trả về chuỗi ngày giờ
+  if (phut.length() == 1) {
+    phut = "0" + phut;
+  }
   String Time = gio + ":" + phut;
-  return Time;
+  for (int i = 0; i < 4; i++) {
+    int index = planOn[i].indexOf(Time);
+    int ledPin = (i == 0 || i == 2) ? Led : Led2;
+    if (index != -1) {
+      planOn[i].replace(Time, "");
+      if (!digitalRead(ledPin)){
+        activeLed(ledPin, true);
+      }
+    }
+    index = planOff[i].indexOf(Time);
+    if (index != -1) {
+      planOff[i].replace(Time, "");
+      if (digitalRead(ledPin)){
+        activeLed(ledPin, false);
+      }
+    }
+  }
 }
 
 void SetUpWifi(){
@@ -172,7 +233,7 @@ void SetUpWifi(){
   }
   else{
     configTime(timezone,dat,"pool.ntp.org","time.nist.gov");
-    Serial.println("time :" + getCurrentDate());
+    Serial.println("time :" + connectCurrentDate());
     SetupBlynk();
     SetupFirebase();
   }
@@ -190,17 +251,18 @@ void SetupBlynk(){
 }
 
 void SetupFirebase(){
-  // Lấy thời gian hiện tại
-  time_t now = time(nullptr);
-  struct tm* p_tm = localtime(&now);
-  String ngay  = String(p_tm -> tm_mday);
-  String thang = String(p_tm -> tm_mon + 1) ;
-  String nam = String(p_tm -> tm_year + 1900);
-  // Trả về chuỗi ngày giờ
-  current_date = ngay + "-" + thang +"-" + nam ;
+  config.database_url = //"https://iot-unity-5a64f-default-rtdb.asia-southeast1.firebasedatabase.app/";
+  "https://iot-nhom-7-d70d7-default-rtdb.firebaseio.com/";
+  config.signer.tokens.legacy_token = //"XWYmXKU9f5egoHYHVhtqGn6H4wZJEirWKVtTX1Yv";
+   "QNZWTt0SoQivgDeFSL5imCXQxGr3gwMEl9Cq49O2";
+  Firebase.begin(&config, &auth);
   getSoLanBatAsync(Led);
   getSoLanBatAsync(Led2);
   Serial.println("Get result : " + String(number[Led2]) + " " + String(number[Led]));
+  UpdatePlan();
+  for (int i = 0; i < 4; i++) {
+    Serial.println(String(i) + " ON : " + planOn[i] + " OFF: " + planOff[i]);
+  }
 }
 
 void Blynk_write(int led, int status){
@@ -216,11 +278,17 @@ BLYNK_WRITE(V7) {
   Blynk_write(Led2, param.asInt());
 }
 
-void writeDataToFirebase(int ledPin, int ledState){
+BLYNK_WRITE(V1) {
+  if (param.asInt()){
+    UpdatePlan();
+  }
+}
+
+void writeDataToFirebase(int ledPin, bool status){
   String currentDate = getCurrentDate(); // Thời gian hiện tại
   String currentTime = getCurrentTime();
-  firebase.setString(String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + currentDate + "/" + (ledState ? "ON" : "OFF") + "/" + String(number[ledPin]), currentTime);
-  number[ledPin] += ledState ? 0 : 1;
+  Firebase.setString(firebaseData, path + String(BLYNK_AUTH_TOKEN) + (ledPin == D6 ? "/D6/" : "/D2/") + getDayOfWeekString(currentDate) + path + currentDate + path + String(number[ledPin]) + path + (status ? "ON" : "OFF"), currentTime);
+  number[ledPin] += status ? 0 : 1;
 }
 
 void SaveData(int ledPin){
@@ -230,9 +298,8 @@ void SaveData(int ledPin){
 
 void activeLed(int ledPin, bool status){
   digitalWrite(ledPin, status);
-  int ledState = digitalRead(ledPin);
-  Blynk.virtualWrite(ledPin == Led ? V2 : V7, ledState);
-  writeDataToFirebase(ledPin, ledState);
+  Blynk.virtualWrite(ledPin == Led ? V2 : V7, status);
+  writeDataToFirebase(ledPin, status);
 }
 
 void buttonPressed(int buttonPin, int ledPin, bool &state) {
@@ -258,6 +325,43 @@ void buttonPressed(int buttonPin, bool &state) {
   }
 }
 
+void GetDataPlan(int ledPin, String type){
+  String currentDay = getDayOfWeekString(getCurrentDate());
+  String datapath = path + String(BLYNK_AUTH_TOKEN) + (ledPin == Led ? "/D6/" : "/D2/") + currentDay + path + type + path;
+  int result = 0;
+
+  // Determine the index based on the ledPin and type
+  int index = (ledPin == Led ? 0 : 1) + (type == "onetime" ? 2 : 0);
+
+  if (Firebase.get(firebaseData, datapath + "ON")) {
+    // Convert const String to C-style string and create a new String
+    planOn[index] = firebaseData.stringData();
+  }
+  if (Firebase.get(firebaseData, datapath + "OFF")) {
+    // Convert const String to C-style string and create a new String
+    planOff[index] = firebaseData.stringData();
+  }
+}
+
+void UpdatePlan(){
+  planOn[4] = {""};
+  planOff[4] = {""};
+  GetDataPlan(Led, "alltime");
+  GetDataPlan(Led, "onetime");
+  GetDataPlan(Led2, "alltime");
+  GetDataPlan(Led2, "onetime");
+  Serial.println("Update plan successfully!");
+}
+
+void updateTime(){
+  if (digitalRead(Led)) {
+      SaveData(Led);
+    }
+  if (digitalRead(Led2)) {
+    SaveData(Led2);
+  }
+}
+
 void setup() {
   // Khởi tạo SPIFFS
   if (!SPIFFS.begin()) {
@@ -265,21 +369,7 @@ void setup() {
     return;
   }
   SetUpWifi();
-}
-
-void backupData(){
-  // Lấy thời gian hiện tại
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;  // Cập nhật thời điểm lần gọi cuối cùng
-    // Kiểm tra và gọi SaveData cho Led1 và Led2
-    if (digitalRead(Led)) {
-      SaveData(Led);
-    }
-    if (digitalRead(Led2)) {
-      SaveData(Led2);
-    }
-  }
+  reconnectTimer.attach(1, updateTime);
 }
 
 void loop() {
@@ -287,5 +377,5 @@ void loop() {
   buttonPressed(Button, Led, previousButtonState);
   buttonPressed(Button2, Led2, previousButtonState2);
   buttonPressed(ButtonReset, previousButtonState3);
-  backupData();
+  checkCurrentPlanTime();
 }
