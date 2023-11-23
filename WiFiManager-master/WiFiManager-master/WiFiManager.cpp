@@ -1313,13 +1313,13 @@ void WiFiManager::handleRequest() {
   if(!testauth) return;
   
   DEBUG_WM(WM_DEBUG_DEV,F("DOING AUTH"));
-  bool res = server->authenticate("admin","12345");
-  if(!res){
-    #ifndef WM_NOAUTH
-    server->requestAuthentication(HTTPAuthMethod::BASIC_AUTH); // DIGEST_AUTH
-    #endif
-    DEBUG_WM(WM_DEBUG_DEV,F("AUTH FAIL"));
-  }
+  // bool res = server->authenticate("admin","12345");
+  // if(!res){
+  //   #ifndef WM_NOAUTH
+  //   server->requestAuthentication(HTTPAuthMethod::BASIC_AUTH); // DIGEST_AUTH
+  //   #endif
+  //   DEBUG_WM(WM_DEBUG_DEV,F("AUTH FAIL"));
+  // }
 }
 
 /** 
